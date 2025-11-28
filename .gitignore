@@ -80,6 +80,7 @@ ipch/
 *.cachefile
 *.VC.db
 *.VC.VC.opendb
+deploy.ps1
 
 # Test Results
 [Tt]est[Rr]esult*/
