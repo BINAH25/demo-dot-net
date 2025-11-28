@@ -1,34 +1,46 @@
 name: Build, Push, and Deploy
-
 on:
   push:
     branches: [main]
   workflow_dispatch:
-
 jobs:
   build-and-push:
     name: Build and Push Windows Docker Image
     runs-on: windows-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
+      
       - name: Switch Docker to Windows containers mode
         run: |
-          & "$Env:ProgramFiles\Docker\Docker\DockerCli.exe" -SwitchDaemon
-
+          # Check if Docker service is running
+          Get-Service docker -ErrorAction SilentlyContinue
+          
+          # Switch to Windows containers using the docker CLI
+          docker version
+          
+          # Alternative method to switch daemon
+          if (Test-Path "C:\ProgramData\Docker\config\daemon.json") {
+            $daemonConfig = Get-Content "C:\ProgramData\Docker\config\daemon.json" | ConvertFrom-Json
+            Write-Host "Current Docker configuration: $daemonConfig"
+          }
+          
+          # Try to pull a Windows base image to verify Windows containers mode
+          docker pull mcr.microsoft.com/windows/nanoserver:ltsc2022
+        shell: powershell
+        continue-on-error: false
+      
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
-
+      
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
-
+      
       - name: Build, tag, and push image to Amazon ECR
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
@@ -36,11 +48,11 @@ jobs:
           IMAGE_TAG: ${{ github.sha }}
         run: |
           docker version
-          docker build -t $Env:ECR_REGISTRY/$Env:ECR_REPOSITORY:$Env:IMAGE_TAG .
-          docker tag $Env:ECR_REGISTRY/$Env:ECR_REPOSITORY:$Env:IMAGE_TAG $Env:ECR_REGISTRY/$Env:ECR_REPOSITORY:latest
-          docker push $Env:ECR_REGISTRY/$Env:ECR_REPOSITORY:$Env:IMAGE_TAG
-          docker push $Env:ECR_REGISTRY/$Env:ECR_REPOSITORY:latest
-
+          docker build -t ${Env:ECR_REGISTRY}/${Env:ECR_REPOSITORY}:${Env:IMAGE_TAG} .
+          docker tag ${Env:ECR_REGISTRY}/${Env:ECR_REPOSITORY}:${Env:IMAGE_TAG} ${Env:ECR_REGISTRY}/${Env:ECR_REPOSITORY}:latest
+          docker push ${Env:ECR_REGISTRY}/${Env:ECR_REPOSITORY}:${Env:IMAGE_TAG}
+          docker push ${Env:ECR_REGISTRY}/${Env:ECR_REPOSITORY}:latest
+        shell: powershell
 
   # deploy:
   #   name: Deploy to EC2
